@@ -79,6 +79,8 @@ poster-vba/
   belong to so they sit on top.
 - Two-line text must be explicit: `"A" & vbLf & "B"` — never rely on autofit.
 - Split into `modPoster_Content2.bas` when nodes + pictures > 18 or a single
+- Math (radicals, fractions, sub/superscripts) uses `AddFormula ... "<LaTeX>" ...` landing as a
+  **native editable Office equation** (LaTeX->OMML, both paths); simple variables stay as italic labels.
   module > 300 lines, and call every `DrawContentN` from `DrawAll`.
 - **Two review rounds are mandatory before delivery**: round 1 is a programmatic
   comparison against the source figure (palette constants vs. `measure_colors.py`
@@ -160,6 +162,8 @@ poster-vba/
   ANSI/GBK 可避免 VBE 乱码；用 `build_poster.py` 出图则无需此步。）
 - **z-order = 调用顺序**：背景最先，图标画在所属面板之后（从而位于其上层）。
 - 两行文字必须显式写 `"A" & vbLf & "B"`，不要依赖自动折行。
+- 数学式（根号/分式/上下标）用 `AddFormula sld, id, x, y, w, h, "<LaTeX>", "<线性fallback>", fontsize, color` 
+  直出**原生可编辑 Office 公式**（LaTeX→OMML，双路径可编辑）；简单变量用斜体文本即可。
 - 节点 + 图片 > 18 或单模块 > 300 行时，拆到 `modPoster_Content2.bas`，并在
   `DrawAll` 中依次调用每个 `DrawContentN`。
 - **交付前必须过两轮评审**：评审一做与源图的程序化对照（调色板常量 vs.
