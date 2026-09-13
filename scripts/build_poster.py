@@ -132,9 +132,121 @@ def load_bas(out_dir: str):
                 ops.append(dict(op="path", **parse_path(split_args(line[8:]))))
             elif line.startswith("AddBars "):
                 ops.extend(parse_bars(split_args(line[8:])))
+            elif line.startswith("AddFormula "):
+                ops.append(dict(op="formula",
+                                **parse_formula(split_args(line[11:]))))
             elif line.startswith(("SetPara ", "SetPartColor ", "BringToFront ")):
                 decor.append(line)  # second pass, after ALL nodes exist
     return pal, scal, ops, decor
+
+
+def parse_formula(args: list[str]) -> dict:
+    """args = [sld, id, x, y, w, h, "tex", "fallback", pt, fontC]"""
+    return dict(
+        id=args[1].strip('"'),
+        x=num(args[2]), y=num(args[3]), w=num(args[4]), h=num(args[5]),
+        tex=args[6].strip('"'),
+        fb=args[7].strip('"'),
+        pt=num(args[8], 16.0) if len(args) > 8 and args[8] else 16.0,
+        ctok=args[9] if len(args) > 9 else "INK",
+    )
+
+
+# ---------------------------------------------------------------- LaTeX -> OMML
+
+def latex_to_omml(tex: str, pt: float) -> str:
+    """LaTeX -> MathML -> OMML (Office Math). Needs latex2mathml + mathml2omml."""
+    import latex2mathml.converter as l2m
+    import mathml2omml
+    mml = l2m.convert(tex)
+    om = mathml2omml.convert(mml)  # '<m:oMath>...</m:oMath>'
+    sz = str(int(round(pt * 100)))
+    # PowerPoint omml runs: <m:r><a:rPr sz i/><m:t>..</m:t></m:r>.
+    # Translate mathml2omml's <m:rPr><m:sty val="X"/> into a:rPr attributes.
+    style = {"i": ' i="1"', "b": ' b="1"', "bi": ' b="1" i="1"'}
+
+    def run_fix(m):
+        return '<m:r><a:rPr lang="en-US" sz="%s"%s/><m:t>' % (sz, style.get(m.group(1), ""))
+
+    om = re.sub(
+        r'<m:r><m:rPr><m:sty m:val="([a-z]+)"/></m:rPr>\s*<m:t>',
+        run_fix, om)
+    om = re.sub(r"<m:r><m:t>", '<m:r><a:rPr lang="en-US" sz="%s"/><m:t>' % sz, om)
+    return om
+
+
+MC_NS = "http://schemas.openxmlformats.org/markup-compatibility/2006"
+A14_NS = "http://schemas.microsoft.com/office/drawing/2010/main"
+M_NS = "http://schemas.openxmlformats.org/officeDocument/2006/math"
+A_NS = "http://schemas.openxmlformats.org/drawingml/2006/main"
+
+
+def math_alternate_xml(omml: str, fallback: str, pt: float) -> str:
+    from xml.sax.saxutils import escape
+    sz = str(int(round(pt * 100)))
+    return (
+        '<mc:AlternateContent xmlns:mc="%s">'
+        '<mc:Choice xmlns:a14="%s" Requires="a14">'
+        '<a14:m xmlns:m="%s">'
+        '<m:oMathPara><m:oMathParaPr><m:jc m:val="centerGroup"/></m:oMathParaPr>'
+        "%s</m:oMathPara>"
+        "</a14:m></mc:Choice>"
+        '<mc:Fallback><a:r xmlns:a="%s">'
+        '<a:rPr lang="en-US" sz="%s" i="1"><a:latin typeface="Cambria Math"/></a:rPr>'
+        "<a:t>%s</a:t></a:r></mc:Fallback>"
+        "</mc:AlternateContent>"
+        % (MC_NS, A14_NS, M_NS, omml.replace("<m:oMath>", '<m:oMath xmlns:a="%s">' % A_NS, 1), A_NS, sz, escape(fallback))
+    )
+
+
+def inject_math(pptx_path: str, formulas: list[dict]) -> int:
+    """Post-edit a saved .pptx: replace each formula shape's fallback text with a
+    real OMML equation (shapes are located by their fallback text).  Runs for
+    BOTH the COM and the replay path, so native math appears either way."""
+    if not formulas:
+        return 0
+    try:
+        import latex2mathml  # noqa: F401
+        import mathml2omml  # noqa: F401
+    except ImportError:
+        print("  math packages missing -> shapes keep linear fallback text", file=sys.stderr)
+        return 0
+    try:
+        return _inject_math_inner(pptx_path, formulas)
+    except Exception as exc:
+        print("  OMML injection failed -> %s (fallback text kept)" % exc, file=sys.stderr)
+        return 1
+
+
+def _inject_math_inner(pptx_path: str, formulas):
+    from pptx import Presentation
+    from lxml import etree
+    prs = Presentation(pptx_path)
+    slide = prs.slides[0]
+    placed = 0
+    for f in formulas:
+        target = None
+        for shp in slide.shapes:
+            if not shp.has_text_frame:
+                continue
+            if shp.text_frame.text.replace("\x0b", " ").strip() == f["fb"].strip():
+                target = shp
+                break
+        if target is None:
+            print("  math: shape not found for %s" % f["id"], file=sys.stderr)
+            continue
+        omml = latex_to_omml(f["tex"], f["pt"])
+        xel = etree.fromstring(math_alternate_xml(omml, f["fb"], f["pt"]))
+        p0 = target.text_frame.paragraphs[0]._p
+        for child in list(p0):
+            if etree.QName(child).localname != "pPr":
+                p0.remove(child)
+        p0.append(xel)
+        placed += 1
+    if placed:
+        prs.save(pptx_path)
+    print("  math: %d/%d LaTeX formulas embedded as native OMML" % (placed, len(formulas)))
+    return 0
 
 
 def num(tok: str, default: float = 0.0) -> float:
@@ -711,6 +823,21 @@ def build_with_replay(out_dir: str, out_path: str) -> int:
             # replay keeps VBA call order, so BringToFront is accepted as a no-op
             print("  replay: note BringToFront %r is a no-op (call order already on top)" % nid)
 
+    def add_formula_shp(f: dict):
+        # placeholder box with the linear fallback text; inject_math() swaps it
+        # for a real OMML equation afterwards
+        shp = slide.shapes.add_textbox(X(f["x"]), Y(f["y"]), L(f["w"]), L(f["h"]))
+        tf = shp.text_frame
+        tf.word_wrap = True
+        tf.vertical_anchor = MSO_ANCHOR.MIDDLE
+        tf.margin_left = tf.margin_right = Pt(1)
+        tf.text = f["fb"]
+        for para in tf.paragraphs:
+            para.alignment = PP_ALIGN.CENTER
+            for r in para.runs:
+                _set_run_font(r, g["font"], g["font_cn"], f["pt"], False, True,
+                              resolve_color(f["ctok"], pal) or (31, 31, 31))
+
     # ---- draw in call order (z-order parity with the VBA path) ----
     for o in ops:
         if o["op"] == "bg":
@@ -721,8 +848,12 @@ def build_with_replay(out_dir: str, out_path: str) -> int:
             add_node_shp(o)
         elif o["op"] == "path":
             add_path_shp(o)
+        elif o["op"] == "formula":
+            add_formula_shp(o)
 
     prs.save(out_path)
+    formulas = [o for o in ops if o["op"] == "formula"]
+    inject_math(out_path, formulas)
     return 0
 
 
@@ -769,6 +900,8 @@ def main() -> int:
     print("poster-vba :: %s -> %s" % (out_dir, out_path))
 
     used = None
+    _, _, ops_, _ = load_bas(out_dir)
+    formulas = [o for o in ops_ if o["op"] == "formula"]
     if not args.replay and is_powerpoint_available():
         print("[path A] PowerPoint COM automation")
         try:
@@ -793,6 +926,8 @@ def main() -> int:
     if not os.path.exists(out_path):
         print("FAILED: %s was not written" % out_path, file=sys.stderr)
         return 1
+    if used == "COM":
+        inject_math(out_path, formulas)
     count = slide_shape_count(out_path)
     size_kb = os.path.getsize(out_path) / 1024.0
     print("OK  [%s]  %s  (%.1f KB, %d shapes)" % (used, out_path, size_kb, count))
