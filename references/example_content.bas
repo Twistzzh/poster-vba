@@ -68,6 +68,10 @@ Public Sub DrawContent1(ByVal sld As Slide)
     AddBars sld, "bars", 660, 195, 480, 170, "", "调研,设计,制作,答辩", "3.2,5.1,4.4,2.8", _
                 ACCENT, LINE, INK, 10
 
+    ' 数学公式（原生 OMML；replay/COM 双路径可编辑，预览用 mathtext）
+    AddFormula sld, "formulaA", 660, 380, 460, 50, "p = \frac{\rho A C_d v^2}{2 P}", _
+                "p = (rho*A*C_d*v^2)/(2*P)", 12, INK
+
     ' 面板 C：成果亮点
     AddNode sld, "panelC", "round_rect", 30, 405, 760, 240, ALT3, -1, 1, LINE_SOLID, "", 11, False, False, INK, 0.08
     AddNode sld, "headC", "rect", 55, 420, 710, 40, -1, -1, 1, LINE_SOLID, "成果亮点", 16, True, False, RGB(56, 128, 82)
