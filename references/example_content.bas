@@ -85,9 +85,9 @@ Public Sub DrawContent2(ByVal sld As Slide)
     AddNode sld, "chartph", "rect", 990, 430, 180, 150, WHITE, LINE, 1, LINE_DASH, _
                 "数据图" & vbLf & "占位", 11, False, False, RGB(120, 120, 120)
 
-    ' 装饰：五角星 + 爱心（展板的活泼元素用形状表达）
-    AddNode sld, "star1", "star5", 1090, 30, 46, 46, RGB(255, 205, 66), -1, 1, LINE_SOLID, "", 8
-    AddNode sld, "star2", "star5", 1150, 95, 30, 30, RGB(255, 205, 66), -1, 1, LINE_SOLID, "", 8
+    ' 装饰：五角星 + 爱心（展板的活泼元素用形状表达，避开文字/标题）
+    AddNode sld, "star1", "star5", 1095, 600, 30, 30, RGB(255, 205, 66), -1, 1, LINE_SOLID, "", 8
+    AddNode sld, "star2", "star5", 1055, 622, 22, 22, RGB(255, 205, 66), -1, 1, LINE_SOLID, "", 8
     AddNode sld, "heart1", "heart", 1130, 610, 42, 40, RGB(240, 98, 146), -1, 1, LINE_SOLID, "", 8
 
     ' 面板 A -> 面板 B 的流程箭头
