@@ -386,6 +386,36 @@ def draw_text(d, n, col, px_per_pt):
         ty += lh
 
 
+def _render_tex_png(tex: str, size_pt: float, col_rgb, px_per_pt: float):
+    """Render a LaTeX string via matplotlib mathtext; returns cropped RGBA image
+    scaled for the canvas (1pt == px_per_pt px). Raises on any failure."""
+    import matplotlib
+    matplotlib.use("Agg")
+    from matplotlib import figure
+    from matplotlib.backends.backend_agg import FigureCanvasAgg
+    fig = figure.Figure(figsize=(8, 2.5), dpi=72)
+    FigureCanvasAgg(fig)
+    fig.patch.set_alpha(0.0)
+    s = tex.replace("\n", " ").strip()
+    s = s.replace("\\,", " ").replace("\\;", " ").replace("\\!", "")
+    s = re.sub(r"\s+", " ", s)
+    col01 = tuple(c / 255.0 for c in (col_rgb or (31, 31, 31)))
+    fig.text(0.5, 0.5, "$%s$" % s, fontsize=size_pt, color=col01,
+             math_fontfamily="stix", ha="center", va="center")
+    fig.canvas.draw()
+    W_, H_ = fig.canvas.get_width_height()
+    buf = bytes(fig.canvas.buffer_rgba())
+    arr = Image.frombytes("RGBA", (W_, H_), buf)
+    alpha = arr.split()[3]
+    bbox = alpha.getbbox()
+    if not bbox:
+        return None
+    arr = arr.crop(bbox)
+    k = px_per_pt
+    nw, nh = max(1, int(arr.width * k)), max(1, int(arr.height * k))
+    return arr.resize((nw, nh), Image.LANCZOS)
+
+
 def main():
     if len(sys.argv) < 2:
         print(__doc__)
@@ -501,6 +531,22 @@ def main():
                            (b[0] + 13 * math.cos(ang + 2.7), b[1] + 13 * math.sin(ang + 2.7)),
                            (b[0] + 13 * math.cos(ang - 2.7), b[1] + 13 * math.sin(ang - 2.7))],
                           fill=c)
+        elif o["op"] == "formula":
+            tc = col(o["ctok"]) or (31, 31, 31)
+            rendered = None
+            try:
+                rendered = _render_tex_png(o["tex"], o["pt"], tc, px_per_pt)
+            except Exception:
+                rendered = None
+            if rendered is not None:
+                px = int(o["x"] + o["w"] / 2 - rendered.width / 2)
+                py = int(o["y"] + o["h"] / 2 - rendered.height / 2)
+                img.paste(rendered, (px, py), rendered)
+            else:
+                cjk = has_cjk(o["fb"])
+                fnt = getfont(max(6, o["pt"] * 0.6 * px_per_pt), False, cjk, "")
+                d.text((o["x"] + o["w"] / 2, o["y"] + o["h"] / 2), o["fb"],
+                       font=fnt, fill=tc, anchor="mm")
 
     img.save(os.path.join(out_dir, "preview_render.png"))
     print("preview_render: %dx%d  pictures=%d" % (CW, CH, n_pic))
