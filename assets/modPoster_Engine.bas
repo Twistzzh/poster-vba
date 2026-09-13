@@ -499,3 +499,16 @@ Public Sub RemovePoster()
     If sld Is Nothing Then Exit Sub
     ClearPrevious sld, TAG_NAME
 End Sub
+' ==== native formula (LaTeX) ================================================
+' LaTeX -> OMML conversion happens OUTSIDE VBA (build_poster.py / replay
+' tooling), because VBA cannot author oMath objects. In the COM path this
+' stub draws the LINEAR fallback text so a manual F5 run still shows something
+' readable; build_poster.py post-edits the saved .pptx and replaces this
+' shape's content with a real m:oMath object (mc:AlternateContent pattern).
+Public Sub AddFormula(ByVal sld As Slide, ByVal id As String, _
+    ByVal x As Single, ByVal y As Single, ByVal w As Single, ByVal h As Single, _
+    ByVal texSrc As String, ByVal fallBack As String, _
+    ByVal sizePt As Single, ByVal fontC As Long)
+    AddNode sld, id, "rect", x, y, w, h, -1, -1, 0, LINE_SOLID, _
+        fallBack, sizePt, False, False, fontC, -1, "Cambria Math"
+End Sub
