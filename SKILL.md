@@ -51,7 +51,7 @@ sci-flowchart-vba（学术流程图）同源不同向——本技能面向**展�
    ```
    COM 优先（真 PowerPoint 绘制 + 导出 PNG 预览）；无 Office 自动回放
    （python-pptx 生成等价原生形状）。形状数 0 视为失败。
-7. **两轮评审**（见下），通过后才准交付。
+7. **两轮评审**（详见 `references/review_rubric.md`），通过后才准交付。
 8. **交付**：`.pptx` 放第一位（`present_files`），附全部 `.bas`、`assets\`
    图标文件夹与导入说明。
 
@@ -125,6 +125,11 @@ End Sub
 
 - **文字保留源语言**：原图中文直接写中文；`.bas` 统一 UTF-8 + CRLF。
 - **两行文字显式** `"A" & vbLf & "B"`，不靠自动折行。
+- **禁止 Chr() 表达式**：回放路径只解析 `"A" & vbLf & "B"` 纯字面量拼接，
+  `Chr(34)`/`Chr(8226)` 会原样写进 pptx 文本。引号一律写中文弯引号
+  `“”` 字面量（原图中文引号本就是弯引号）；项目符号直接写字面 `•`。
+- **禁止 For 循环生成节点**：回放按调用流线性解析，循环内的 AddNode
+  不会执行；同型节点必须逐个手工展开（id 后缀 0,1,2…）。
 - **坐标/颜色/文字来自识图与程序化测量**，禁止凭空猜；拿不准就近取实测值。
 - **字号分层**：主标题 > 面板标题 > 正文 > 注释，同一层级统一，
   按字像素高换算（见 font-matching.md 的公式）。
@@ -162,32 +167,58 @@ python scripts/build_poster.py <输出目录> [--out poster.pptx] [--no-run]
 
 ## 两轮评审（交付前必过）
 
-### 评审一：与原图的程序化对照（.bas 常量 + 测量输出）
+`build_poster.py` 出了 `.pptx` 不等于完工。**必须顺序过两轮评审**，标准全文见
+`references/review_rubric.md`；`references/review_examples/` 里有一对正/负样本
+（`origin.png` 风格基准原图、`failed.png` 失败案例渲染图），评审前先对照看一遍，把
+失败案例踩过的坑（标题褪色、面板衬底过淡、文字溢出面板、图标占位残留、装饰遮挡、
+柱图错位、形状出界）记在脑子里。
 
-- **配色**：调色板常量必须能和 `measure_colors.py` 的输出对上号；
-  强调色饱和度不许褪（原图鲜蓝就写实测 RGB，不许"差不多蓝"）；
-  背景深浅、面板衬底同原图。
-- **字体**：`font_check.py` 全部 `[可用]`；家族类别（黑/宋/楷/圆/行楷）
-  与原图特征一致；中英分槽正确。
-- **字号**：层级比例与原图一致，同一层级统一；用 compare_text.py
-  带测量（源图传两遍）或 font-matching.md 公式核对。
-- **素材**：图标 PNG 已验证透明（check 通过）且分辨率够（缩放后不糊）。
+### 评审一：风格与源图一致性（看 `.bas` 调色板 / 字号 / 字体 + 预览渲染图）
 
-不通过 → 修常量/换素材 → 重新测量 → 通过才进评审二。
+**评审对象**：`modPoster_Content*.bas` 的调色板与字号常量、
+`scripts/render_preview.py` 产出的 `preview_compare.png`（上源图 / 下渲染）。
+**程序化互验**：`scripts/measure_colors.py`（取色）、`scripts/compare_text.py`
+（字号反推，中文加 `--cjk`）、`scripts/font_check.py`（字体可用性）、
+`scripts/icon_tool.py check`（图标透明 / 分辨率）。
 
-### 评审二：最终渲染视觉对照（preview.png / 导出 PNG vs 原图）
+- [ ] **配色**：每个颜色常量来自程序化取色；强调色饱和度不褪色、浅色面板衬底
+      不过淡、背景深浅与原图一致；文字与底色对比度足够。
+- [ ] **字体**：家族与原图一致；`font_check.py` 全部 `[可用]`；中英分槽
+      （中文写在 `FONT_NAME_CN`）。
+- [ ] **字号**：层级比例与原图一致（主标题 > 面板标题 > 正文 > 注释），
+      用 `compare_text.py` 核对，禁止一律 12pt；粗体位置与原图一致。
+- [ ] **图标**：PNG 已用 `icon_tool.py check` 验证透明且分辨率够；
+      无灰色虚线占位框残留。
+- [ ] **数据图**：占位框或 `AddBars` 柱图与内容一致。
 
-多模态逐项对照原图检查：
+不通过 → 修调色板常量 / 字号 / 字体 / 换素材 → 重跑
+`render_preview.py` → 重新对照，过了才进 `build_poster.py`。
 
-- [ ] 整体版式：区块位置、大小、留白与原图对应（允许 5% 内偏差）。
-- [ ] 背景还原：纯色/渐变/装饰位置正确；盖板策略下原文字全部被盖住。
-- [ ] 图标：位置、大小、清晰度合格；无占位框残留（除非素材确实缺失并已说明）。
-- [ ] 文字：无溢出面板、无穿底、层级清楚；中文正确显示（无豆腐块）。
-- [ ] 数据图：占位或柱图渲染正常，柱图数值/类目与内容一致。
-- [ ] 卡通装饰（星星/爱心等）位置自然，不遮内容。
+### 评审二：最终 PPT 渲染检查（看 `poster.pptx` 渲染图 + 程序化几何检查）
 
-不通过 → 修 `.bas` → 重跑 `build_poster.py` → 再审。最多 3 轮，
-仍不过就停下说明剩余问题，**不要带病交付**。
+**评审对象**：`build_poster.py` 产出的 `poster.pptx`（有 PowerPoint 时导出幻灯片
+PNG；无 PowerPoint 时用 `preview_compare.png`，二者语义等价），
+外加 `scripts/review_render.py` 的程序化报告。
+
+```bash
+python scripts/review_render.py <输出目录>   # 对 poster.pptx 自动体检
+```
+
+脚本按真实字体检查：**文本溢出面板、字号整体偏小、图标缺失占位、图片出界/发糊、
+装饰遮挡文字、形状出界**，并报告"文字宽/面板宽"中位数提示字体整体偏小。
+退出码 0 = PASS。
+
+- [ ] 任何文字都不得溢出所属面板/节点框；需要两行的文字显式写
+      `"A" & vbLf & "B"`，不许依赖自动折行。
+- [ ] 图标位置、大小、清晰度合格；无占位框残留（除非素材确实缺失并已说明）。
+- [ ] 背景还原正确：纯色/渐变方向对；盖板策略下原文字全被盖住。
+- [ ] 面板/区块位置、大小、留白与原图对应（允许 5% 内偏差）。
+- [ ] 卡通装饰（星星/爱心等）位置自然，不遮标题与正文。
+- [ ] 所有形状在幻灯片画面内，无出界。
+
+不通过 → 修 `.bas`（坐标/字号/`vbLf` 换行/图标位置）→ 重跑
+`build_poster.py` → 再跑 `review_render.py`。最多迭代 3 轮，仍不过就停下向
+用户说明剩余问题，**不要带病交付**。
 
 ---
 
@@ -211,8 +242,11 @@ python scripts/build_poster.py <输出目录> [--out poster.pptx] [--no-run]
 - [ ] 全部 `.bas` 为 UTF-8 + CRLF。
 - [ ] `font_check.py` 验证过全部字体名；中文字体写在 `FONT_NAME_CN`。
 - [ ] 图标 PNG 经 `icon_tool.py check` 验证；`ASSET_DIR` 为绝对路径且以 `\` 结尾。
-- [ ] **`build_poster.py` 已跑通，`.pptx` 里有形状**（非空板）。
-- [ ] 评审一、评审二均已通过（保留 preview.png 供用户对照）。
+- [ ] **`scripts/lint_vba.py` 已跑，无 ERROR。**
+- [ ] **`scripts/build_poster.py` 已跑通，`.pptx` 里有形状**（非空板）。
+- [ ] `scripts/review_render.py` 退出码 0（文字无溢出、无图标占位、无出界）。
+- [ ] `scripts/render_preview.py` 已生成 `preview_compare.png` 供两轮评审对照。
+- [ ] 评审一、评审二均已通过（保留 `preview_compare.png` 供用户对照）。
 - [ ] 交付物：`.pptx`（第一位）+ 全部 `.bas` + `assets\` 图标 + 导入说明。
 
 ## 常见问题排查
@@ -228,15 +262,24 @@ python scripts/build_poster.py <输出目录> [--out poster.pptx] [--no-run]
 | `.pptx` 空白 | COM 异常被吞 / 漏 `DrawAll` | 看脚本日志；`--replay` 兜底并回查 `.bas` |
 | 重建报 `PermissionError` | pptx 被预览占用 | `--out poster_v2.pptx` 换名输出 |
 | 回放路径渐变方向不对 | 极少数 python-pptx 版本差异 | 评审二会发现；必要时改纯色或手动调 gradient_angle |
+| pptx 文本出现 `Chr(34)`/`& vbLf` 字样 | 内容模块用了 Chr() 拼接 | 改中文弯引号/字面 • 字面量，重建（见硬约束） |
+| 部分节点凭空消失 | 节点写在 For 循环里 | 手工展开循环后重建（见硬约束） |
 
 ## 资源
 
 - `assets/modPoster_Engine.bas` — 固定引擎（映射/形状/图片/背景/柱图/字体/幂等/入口）
 - `references/poster-module-map.md` — API 全表、kind→mso 编号、双路径一致性约定
 - `references/example_content.bas` — 可运行示例（覆盖全部新能力）
+- `references/review_rubric.md` — 两轮评审标准全文（风格一致性 + 渲染几何检查）
+- `references/review_examples/origin.png` — 风格基准正样本
+- `references/review_examples/failed.png` — 失败案例负样本（附八类典型失败）
+- `references/review_examples/make_examples.py` — 示例图生成脚本（复现用）
 - `references/font-matching.md` — 中文字体特征识别 + 字号测算公式 + 回退策略
 - `references/icon-sourcing.md` — 图标三路线（搜索/抠图/形状拼贴）+ 背景策略表
 - `scripts/build_poster.py` — `.bas` → 真实 `.pptx`（COM 优先，回放兜底，--export-png）
+- `scripts/lint_vba.py` — 交付前结构自检（11 常量 / DrawAll / 空实参 / kind / 颜色 / 编码）
+- `scripts/review_render.py` — 评审二程序化检查（文字溢出 / 图标缺失 / 遮挡 / 出界）
+- `scripts/render_preview.py` — 回放 `.bas` 渲染 `preview_compare.png`（与源图并排）
 - `scripts/icon_tool.py` — probe / check / cut（抠底、去白边、放大、锐化）
 - `scripts/font_check.py` — 已安装字体枚举与匹配回退
 - `scripts/measure_colors.py` — 通用取色（主色/区域底色/文字色/强调色）
