@@ -197,6 +197,16 @@ def main(d):
                 for idx in (8, 9, 10):  # barC, lineC, txtC
                     if len(a) > idx and a[idx] and not color_ok(a[idx]):
                         errs.append("%s:%d 未定义的柱图颜色 %s" % (fn, ln, a[idx]))
+            elif s.startswith("AddFormula "):
+                a = split_args(s[11:])[1:]
+                if len(a) < 9:
+                    errs.append("%s:%d AddFormula 实参不足（至少 9：id,x,y,w,h,tex,fallback,pt,fontC）" % (fn, ln))
+                check_call(a, fn, ln, errs, warns)
+                if len(a) > 8 and a[8] and not color_ok(a[8]):  # fontC
+                    errs.append("%s:%d 未定义的公式颜色 %s" % (fn, ln, a[8]))
+                tex = a[5].strip('"') if len(a) > 5 else ""
+                if "\\\\" in tex:
+                                                            warns.append("%s:%d LaTeX 里反斜杠不要双写（VBA 不转义）" % (fn, ln))
             elif s.startswith("AddPath "):
                 n_path += 1
                 a = split_args(s[8:])[1:]
