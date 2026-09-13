@@ -59,6 +59,20 @@ AddBars sld, id, x, y, w, h, title, "类别1,类别2", "v1,v2", barC, lineC, txt
 - 柱高 `v/vmax*plotH*0.90`；数值标签在柱上方 `0.08h` 带内；基线为一条线段。
 - 生成的子形状 id：`id_t / id_bN / id_vN / id_cN / id_axis`（可被 SetPara 引用）。
 
+
+### AddFormula —— 原生 Office 公式（LaTeX）
+
+AddFormula sld, "fx", x, y, w, h, "CESI = \sqrt[3]{EHI \times (1-ERI) \times ESI}", _
+    "CESI = (EHI x (1-ERI) x ESI)^(1/3)", 13, INK
+
+- 建一个透明文本框占位，`build_poster.py` 在保存后把它替换为**原生 OMML 公式**
+  （COM 路径同样后处理；VBA 手动 F5 只能看到线性 fallback 文本）。
+- `tex` 用双引号包裹、**单反斜杠**（VBA 不转义反斜杠；单引号是行注释）。
+- `fallBack` 是给 VBE/无 math 依赖环境的线性版，不要事后手改（注入按它找形状）。
+- 字号：公式宽 ≈ fontPt × 1.83px/字符 × 字符数；溢出就缩字号或加宽 w。
+- 预览：matplotlib mathtext（STIX）渲染同一 LaTeX，失败降级线性文本。
+- 依赖：`pip install latex2mathml mathml2omml`。
+
 ### AddPath —— 折线/箭头
 ```vba
 AddPath sld, id, "x1,y1;x2,y2;x3,y3", lineC, lineW, dash, arrowEnd
