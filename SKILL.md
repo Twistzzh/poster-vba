@@ -72,6 +72,13 @@ sci-flowchart-vba（学术流程图）同源不同向——本技能面向**展�
 - `AddBars sld, id, x, y, w, h, title, "类别,…", "值,…", barC, lineC, txtC [, labelPt] [, titlePt]`
   — 迷你柱状图（原生形状）。
 - `AddPath sld, id, "x1,y1;x2,y2", lineC, lineW, dash, arrowEnd` — 折线/箭头。
+- `AddFormula sld, id, x, y, w, h, "<LaTeX>", "<线性fallback>", fontPt, fontC`
+  — **原生 Office 公式**（LaTeX→OMML，Cambria Math，居中）。适合分式 / 根号 /
+  上下标这类文本框摆不出来的数学式；LaTeX 写在双引号字符串里、**单反斜杠**
+  （VBA 不转义反斜杠；单引号是行注释，别用单引号包公式）。COM 路径先画线性
+  fallback，`build_poster.py` 保存后把该形状后处理成真 OMML；replay 路径直接
+  注入。依赖 `pip install latex2mathml mathml2omml`（venv 已装）。预览用
+  matplotlib mathtext 渲染同一 LaTeX（STIX 衬线，与 Times 风格接近）。
 - `SetPara sld, id, "left", marginPx` 正文左对齐；`SetPartColor sld, id, nChars, colorC`
   前 n 字强调色；`BringToFront sld, id` 提到最前。
 - kind 除流程图全家桶外还有卡通族：`star4/star5/star6/star8 heart cloud sun moon
@@ -241,6 +248,8 @@ python scripts/review_render.py <输出目录>   # 对 poster.pptx 自动体检
 - [ ] 颜色全是 `RGB(r,g,b)`；无 `vbRed`；无空实参槽位（`,,`）。
 - [ ] 全部 `.bas` 为 UTF-8 + CRLF。
 - [ ] `font_check.py` 验证过全部字体名；中文字体写在 `FONT_NAME_CN`。
+- [ ] 数学式（根号/分式/上下标）用 `AddFormula`（LaTeX 源单反斜杠、双引号），
+      交付 `.pptx` 里是真 OMML 公式对象；不用手工"√字符+上划线"拼装。
 - [ ] 图标 PNG 经 `icon_tool.py check` 验证；`ASSET_DIR` 为绝对路径且以 `\` 结尾。
 - [ ] **`scripts/lint_vba.py` 已跑，无 ERROR。**
 - [ ] **`scripts/build_poster.py` 已跑通，`.pptx` 里有形状**（非空板）。
@@ -263,6 +272,9 @@ python scripts/review_render.py <输出目录>   # 对 poster.pptx 自动体检
 | 重建报 `PermissionError` | pptx 被预览占用 | `--out poster_v2.pptx` 换名输出 |
 | 回放路径渐变方向不对 | 极少数 python-pptx 版本差异 | 评审二会发现；必要时改纯色或手动调 gradient_angle |
 | pptx 文本出现 `Chr(34)`/`& vbLf` 字样 | 内容模块用了 Chr() 拼接 | 改中文弯引号/字面 • 字面量，重建（见硬约束） |
+| 公式在 PPT 里是线性文本 | latex2mathml / mathml2omml 未安装，或 fallback 文本被改动导致注入找不到形状 | `pip install latex2mathml mathml2omml`；fallback 不要手改 |
+| 公式溢出面板 | fontPt 过大 | 公式宽 ≈ pt×1.83px/字符×字符数，缩小 fontPt 或加宽 AddFormula 的 w |
+| LaTeX 转义出乱码 | 双写了反斜杠或用了单引号 | tex/fallback 必须双引号 + 单反斜杠 |
 | 部分节点凭空消失 | 节点写在 For 循环里 | 手工展开循环后重建（见硬约束） |
 
 ## 资源
